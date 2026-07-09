@@ -48,6 +48,7 @@ function Signup() {
     <>
       <section className='signup'>
         <form className='inpdiv'>
+            <h1>signup</h1>
             <input type="text" placeholder='name' className='inputlog' onChange={(e) => setname(e.target.value)}/>
             <input type="email" placeholder='email' className='inputlog' onChange={(e) => setemail(e.target.value)} />
             <input type="text" placeholder='password' className='inputlog' onChange={(e) => setpassword(e.target.value)}/>

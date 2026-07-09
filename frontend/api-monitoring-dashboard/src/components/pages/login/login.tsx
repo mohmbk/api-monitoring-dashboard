@@ -47,6 +47,7 @@ function Login() {
     <>
       <section className='login'>
         <form className='form'>
+            <h1>Login</h1>
             <input type="email" placeholder='email' className='inputlog' onChange={(e) => setemail(e.target.value)}/>
             <input type="text" placeholder='password' className='inputlog' onChange={(e) => setpassword(e.target.value)}/>
             <input type="button" value='login !!' className='loginbtn' onClick={login}/>
