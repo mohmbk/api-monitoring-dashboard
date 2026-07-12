@@ -152,6 +152,120 @@ func login(w http.ResponseWriter, r *http.Request) {
 }
 
 
+func getapis(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return ;
+	}
+
+	authHeader := r.Header.Get("Authorization");
+	if authHeader == "" {
+		http.Error(w, "Authorization header missing", http.StatusUnauthorized)
+		return ;
+	}
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ");
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+    	return jwtSecret, nil
+	})
+
+	if err != nil || !token.Valid {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return ;
+	}
+
+	claims := token.Claims.(jwt.MapClaims);
+	userId := claims["userId"].(string);
+
+	cursor , err := apicollection.Find(context.Background(), bson.M{"userId": userId});
+	if err != nil {
+		http.Error(w, "Failed to fetch APIs", http.StatusInternalServerError)
+		return ;
+	}
+	var apis []API;
+	for cursor.Next(context.Background()) {
+		var api API;
+		err := cursor.Decode(&api);
+		if err != nil {
+			http.Error(w, "Failed to decode API", http.StatusInternalServerError)
+			return ;
+		}
+		apis = append(apis, api);
+	}
+
+	w.header().Set("Content-Type", "application/json");
+	json.NewEncoder(w).Encode(apis);
+}
+
+
+func startMonitoring() {
+	ticker := time.NewTicker(1 * time.Minute);
+	defer ticker.Stop();
+	for {
+		<- ticker.C
+		var apis []API;
+		cursor , err := apicollection.Find(context.Background(), bson.M{})
+		for cursor.Next(context.Background()) {
+			var api API;
+			err := cursor.Decode(&api);
+			apis := append(apis, api);
+			if err != nil {
+				fmt.Println("Error decoding API: ", err);
+				continue ;
+			}
+		}
+
+		for _, api := range apis {
+			checkAPI(api);
+		}
+	}
+}
+
+
+func checkAPI(api API) {
+	start := time.Now();
+	resp , err := http.Get(api.URL);
+	responseTime := time.Since(start).Milliseconds();
+	check := Check{
+		APIID:        api.ID,
+		ResponseTime: responseTime,
+		CheckedAt:    time.Now(),
+	}
+
+	if err != nil {
+		check.Status = "DOWN"
+		check.StatusCode = 0 ;
+	}else{
+		defer resp.Body.Close();
+		check.StatusCode = resp.StatusCode
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			check.Status = "UP"
+		}else{
+			check.Status = "DOWN"
+		}
+	}
+
+
+	result , err := checkcollection.InsertOne(context.Background(), check);
+	if err != nil {
+		fmt.Println("Error inserting check result: ", err);
+		return ;
+	}
+
+	update := bson.M{
+		"$set": bson.M{
+			"lastStatus":       check.Status,
+			"lastStatusCode":   check.StatusCode,
+			"lastResponseTime": check.ResponseTime,
+			"lastCheckedAt":    check.CheckedAt,
+		},
+	}
+
+	_, err = ApiCollection.UpdateByID(context.Background(), api.ID, update)
+	if err != nil {
+		log.Println(err)
+	}
+}
+
 
 func main() {
 	ctx , cancel := context.WithTimeout(context.Background() , 10*time.Second);
@@ -170,6 +284,9 @@ func main() {
 
 	http.HandleFunc("/signup", enableCORS(createUser));
 	http.HandleFunc("/login", enableCORS(login));
+	http.HandleFunc("/dashboard", enableCORS(getapis));
+	
+	go startMonitoring();
 	
 	fmt.Println("Server running on http://localhost:8080");
 	 http.ListenAndServe(":8080", nil);
