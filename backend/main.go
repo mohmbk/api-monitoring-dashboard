@@ -13,7 +13,7 @@ var usercollection *mongo.Collection
 type User struct {
 	ID               primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	Username         string             `bson:"username" json:"username"`
-	email            string             `bson:"email" json:"email"`
+	Email            string             `bson:"email" json:"email"`
 	Password         string             `bson:"password" json:"password"`
 }
 
@@ -47,7 +47,7 @@ type Check struct {
 }
 
 type loginuser struct {
-	email   string `json:"email"`
+	Email   string `json:"email"`
 	Password string `json:"password"`
 }
 
@@ -55,16 +55,24 @@ type loginResponse struct {
 	Token string `json:"token"`
 }
 
+type apiRequest struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+var jwtSecret = []byte("ma_cle_secrete")
+
 func enableCORS(next http.HandlerFunc) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         w.Header().Set("Access-Control-Allow-Origin", "*")
         w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-        w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-        
+        w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
         if r.Method == "OPTIONS" {
             w.WriteHeader(http.StatusOK)
             return
         }
+
         next(w, r)
     }
 }
@@ -82,7 +90,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 
-	count , err := usercollection.CountDocuments(context.Background(), bson.M{"username": user.Username , "email": user.email , "password": user.Password});
+	count , err := usercollection.CountDocuments(context.Background(), bson.M{"username": user.Username , "email": user.Email , "password": user.Password});
 	if err != nil {
 		http.Error(w, "Failed to check existing user", http.StatusInternalServerError)
 		return ;
@@ -113,9 +121,11 @@ func login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return ;
 	}
+	fmt.Println("Login attempt for email: ", loginUser.Email);
+	fmt.Println("Login attempt for password: ", loginUser.Password);
 
 	var user User;
-	err = usercollection.FindOne(context.Background(), bson.M{"email": loginUser.email}).Decode(&user);
+	err = usercollection.FindOne(context.Background(), bson.M{"email": loginUser.Email}).Decode(&user);
 
 	if err != nil {
 		http.Error(w, "User not found", http.StatusUnauthorized)
@@ -134,7 +144,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte("your-secret-key"))
+	tokenString, err := token.SignedString(jwtSecret)
 	if err != nil {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return ;
@@ -174,9 +184,18 @@ func getapis(w http.ResponseWriter, r *http.Request) {
 	}
 
 	claims := token.Claims.(jwt.MapClaims);
-	userId := claims["userId"].(string);
+	userIdHex := claims["userId"].(string)
 
-	cursor , err := apicollection.Find(context.Background(), bson.M{"userId": userId});
+	userObjectID, err := primitive.ObjectIDFromHex(userIdHex)
+	if err != nil {
+		http.Error(w, "Invalid user id", http.StatusBadRequest)
+		return
+	}
+
+	cursor, err := apicollection.Find(
+		context.Background(),
+		bson.M{"userId": userObjectID},
+	)
 	if err != nil {
 		http.Error(w, "Failed to fetch APIs", http.StatusInternalServerError)
 		return ;
@@ -192,8 +211,66 @@ func getapis(w http.ResponseWriter, r *http.Request) {
 		apis = append(apis, api);
 	}
 
-	w.header().Set("Content-Type", "application/json");
+	w.Header().Set("Content-Type", "application/json");
 	json.NewEncoder(w).Encode(apis);
+}
+
+
+func createAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return ;
+	}
+	var apiReq apiRequest;
+	err := json.NewDecoder(r.Body).Decode(&apiReq);
+	if err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return ;
+	}
+	fmt.Println("Creating API with Name: ", apiReq.Name);
+	fmt.Println("Creating API with URL: ", apiReq.URL);
+
+	authHeader := r.Header.Get("Authorization");
+	if authHeader == "" {
+		http.Error(w, "Authorization header missing", http.StatusUnauthorized)
+		return ;
+	}
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ");
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return jwtSecret, nil
+	})
+	if err != nil || !token.Valid {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return ;
+	}
+
+	claims := token.Claims.(jwt.MapClaims);
+	userId := claims["userId"].(string);
+	var api API;
+	api.Name = apiReq.Name;
+	api.URL = apiReq.URL;
+	objectID, err := primitive.ObjectIDFromHex(userId)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	api.UserID = objectID
+
+	result, err := apicollection.InsertOne(context.Background(), api);
+	if err != nil {
+		http.Error(w, "Failed to create API", http.StatusInternalServerError)
+		return ;
+	}
+	fmt.Println("API created with ID: ", result.InsertedID);
+}
+
+func handleAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		createAPI(w, r);
+	}else if r.Method == "GET" {
+		getapis(w, r);
+	}
 }
 
 
@@ -204,10 +281,14 @@ func startMonitoring() {
 		<- ticker.C
 		var apis []API;
 		cursor , err := apicollection.Find(context.Background(), bson.M{})
+		if err != nil {
+			fmt.Println("Error fetching APIs: ", err);
+			continue ;
+		}
 		for cursor.Next(context.Background()) {
 			var api API;
 			err := cursor.Decode(&api);
-			apis := append(apis, api);
+			apis = append(apis, api);
 			if err != nil {
 				fmt.Println("Error decoding API: ", err);
 				continue ;
@@ -250,6 +331,7 @@ func checkAPI(api API) {
 		fmt.Println("Error inserting check result: ", err);
 		return ;
 	}
+	fmt.Println("Check result inserted with ID: ", result.InsertedID);
 
 	update := bson.M{
 		"$set": bson.M{
@@ -260,9 +342,9 @@ func checkAPI(api API) {
 		},
 	}
 
-	_, err = ApiCollection.UpdateByID(context.Background(), api.ID, update)
+	_, err = apicollection.UpdateByID(context.Background(), api.ID, update)
 	if err != nil {
-		log.Println(err)
+		fmt.Println("Error updating API: ", err);
 	}
 }
 
@@ -284,7 +366,7 @@ func main() {
 
 	http.HandleFunc("/signup", enableCORS(createUser));
 	http.HandleFunc("/login", enableCORS(login));
-	http.HandleFunc("/dashboard", enableCORS(getapis));
+	http.HandleFunc("/dashboard", enableCORS(handleAPI));
 	
 	go startMonitoring();
 	

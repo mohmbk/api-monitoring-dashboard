@@ -1,4 +1,4 @@
-import { useState , useEffect } from 'react'
+import React, { useState , useEffect } from 'react'
 import './dashboard.css'
 
 
@@ -15,6 +15,15 @@ function Dashboard() {
   lastCheckedAt: string;
   createdAt: string;
 }
+
+interface addapi {
+  name : string ;
+  url : string ;
+}
+
+
+const [name , setname] = useState('');
+const [url , seturl] = useState('');
 
 const [apis , setapis] = useState<Api[]>([]) ;
 
@@ -46,9 +55,79 @@ const [apis , setapis] = useState<Api[]>([]) ;
 
     }, []);
 
+    const addapi = async (e : React.MouseEvent) => {
+      e.preventDefault();
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch("http://localhost:8080/dashboard" , {
+          method : "POST" , 
+          headers : {
+            "Content-Type" : "application/json" ,
+            "Authorization": `Bearer ${token}`
+          },
+
+          body : JSON.stringify({
+            name : name , 
+            url : url ,
+          })
+
+        })
+
+        if(!response.ok){
+          alert(await response.text());
+          return ;
+        }
+
+        alert("api created"); 
+        setname("");
+        seturl("");
+      } catch (error) {
+        console.log(error);
+        
+      }
+    }
+
+
+
   return (
     <>
-      
+    <br /><br /><br /><br />
+      <section className='apis'>
+        {apis.map((api) => (
+          <div className="api" key={api.id}>
+            <h3>{api.name}</h3>
+
+            <p>
+              <strong>URL :</strong> {api.url}
+            </p>
+
+            <p>
+              <strong>Status :</strong> {api.lastStatus}
+            </p>
+
+            <p>
+              <strong>Code :</strong> {api.lastStatusCode}
+            </p>
+
+            <p>
+              <strong>Response Time :</strong> {api.lastResponseTime} ms
+            </p>
+
+            <p>
+              <strong>Last Checked :</strong> {api.lastCheckedAt}
+            </p>
+          </div>
+        ))}
+      </section>
+        <br /><br /><br /><br />
+      <section className='container'>
+        <div className='addapi'>
+          <h1>add api !!</h1>
+          <input type="text" placeholder='enter name' className='inpapi' onChange={(e) => setname(e.target.value)} />
+          <input type="text" placeholder='enter url' className='inpapi' onChange={(e) => seturl(e.target.value)}/>
+          <input type="button" value='add api'className='apibtn' onClick={addapi}/>
+        </div>
+      </section>
     </>
   )
 }

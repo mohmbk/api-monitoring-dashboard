@@ -5,7 +5,7 @@ import './signup.css'
 function Signup() {
  
     interface signup {
-        name : string ;
+        username : string ;
         email : string ;
         password : string ;
     }
@@ -25,7 +25,7 @@ function Signup() {
                 },
 
                 body : JSON.stringify({
-                    name : name ,
+                    username : name ,
                     email : email ,
                     password : password ,
                 })
@@ -52,7 +52,7 @@ function Signup() {
             <input type="text" placeholder='name' className='inputlog' onChange={(e) => setname(e.target.value)}/>
             <input type="email" placeholder='email' className='inputlog' onChange={(e) => setemail(e.target.value)} />
             <input type="text" placeholder='password' className='inputlog' onChange={(e) => setpassword(e.target.value)}/>
-            <input type="button" value='sign up !!' className='loginbtn' onClick={Signup}/>
+            <input type="button" value='sign up !!' className='loginbtn' onClick={signup}/>
         </form>
       </section>
     </>

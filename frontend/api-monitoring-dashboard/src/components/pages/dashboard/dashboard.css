@@ -1,0 +1,34 @@
+.container{
+    height: 50vh;
+    width: 100%;
+    background-color: red;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.addapi{
+    height: 80%;
+    width: 50%;
+    background-color: blue;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    align-items: center;
+}
+
+.inpapi{
+    height: 20%;
+    width: 60%;
+    border: none;
+    border-radius: 15px;
+    padding-left: 10px;
+}
+
+.apibtn{
+    height: 15%;
+    width: 20%;
+    background-color: aqua;
+    border: none;
+    border-radius: 15px;
+}

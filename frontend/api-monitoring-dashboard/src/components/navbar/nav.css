@@ -1,13 +1,14 @@
 .nav{
     height: 10vh;
     width: 100%;
-    background-color: red;
+    background-color: rgb(36, 27, 27);  
     position: fixed;
     display: flex;
     flex-direction: row;
     justify-content: space-around;
     align-items: center;
     margin: 0%;
+  
 }
 
 

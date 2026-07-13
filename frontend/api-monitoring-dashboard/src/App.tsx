@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BrowserRouter as Router, Routes, Route , Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route , Navigate  } from "react-router-dom";
 
 import './App.css'
 
@@ -10,7 +10,7 @@ import Dashboard from './components/pages/dashboard/dashboard';
 import Signup from './components/pages/signup/signup';
 import History from './components/pages/history/history';
 function App() {
- 
+
   const showNavbar =
     location.pathname !== "/login" &&
     location.pathname !== "/signup";
