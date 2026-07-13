@@ -1,5 +1,6 @@
 import React, { useState , useEffect } from 'react'
 import './dashboard.css'
+import { useNavigate } from 'react-router-dom';
 
 
 function Dashboard() {
@@ -88,6 +89,28 @@ const [apis , setapis] = useState<Api[]>([]) ;
     }
 
 
+    async function deleteapi(id : string) {
+      try {
+        const resp = await fetch(`http://localhost:8080/students/${id}` , {
+          method : "DELETE" ,
+        });
+
+        if (!resp.ok){
+          alert(await resp.text());
+          return ;
+        }
+      } catch (error) {
+        console.log(error);
+      }
+    }
+
+    const navigate = useNavigate();
+
+    function viewHistory(id: string) {
+      navigate(`/dashboard/api/${id}/history`);
+    }
+
+
 
   return (
     <>
@@ -95,27 +118,36 @@ const [apis , setapis] = useState<Api[]>([]) ;
       <section className='apis'>
         {apis.map((api) => (
           <div className="api" key={api.id}>
-            <h3>{api.name}</h3>
+            <div className='left'>
+              <h3>name : {api.name}</h3>
 
-            <p>
-              <strong>URL :</strong> {api.url}
-            </p>
+              <p>
+                <strong>URL :</strong> {api.url}
+              </p>
 
-            <p>
-              <strong>Status :</strong> {api.lastStatus}
-            </p>
+              <p>
+                <strong>Status :</strong> {api.lastStatus}
+              </p>
 
-            <p>
-              <strong>Code :</strong> {api.lastStatusCode}
-            </p>
+              <p>
+                <strong>Code :</strong> {api.lastStatusCode}
+              </p>
 
-            <p>
-              <strong>Response Time :</strong> {api.lastResponseTime} ms
-            </p>
+              <p>
+                <strong>Response Time :</strong> {api.lastResponseTime} ms
+              </p>
 
-            <p>
-              <strong>Last Checked :</strong> {api.lastCheckedAt}
-            </p>
+              <p>
+                <strong>Last Checked :</strong> {api.lastCheckedAt}
+              </p>
+            </div>
+
+            <div className='right'>
+              <button className='mbtn' onClick={() => deleteapi(api.id)}>delete api</button>
+              <button className='mbtn' onClick={() => viewHistory(api.id) }>view history</button>
+            </div>
+
+            
           </div>
         ))}
       </section>
