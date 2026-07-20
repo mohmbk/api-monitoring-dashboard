@@ -45,7 +45,7 @@ const [apis , setapis] = useState<Api[]>([]) ;
           }
 
           const data = await response.json();
-          setapis(data) ;
+          setapis(data ?? []);
         }
 
         fetchApis();
@@ -90,9 +90,15 @@ const [apis , setapis] = useState<Api[]>([]) ;
 
 
     async function deleteapi(id : string) {
+      
       try {
-        const resp = await fetch(`http://localhost:8080/students/${id}` , {
+        const token = localStorage.getItem("token");
+        const resp = await fetch(`http://localhost:8080/dashboard/${id}` , {
           method : "DELETE" ,
+          headers : {
+            "Authorization": `Bearer ${token}`
+          },
+          
         });
 
         if (!resp.ok){
@@ -149,7 +155,11 @@ const [apis , setapis] = useState<Api[]>([]) ;
 
             
           </div>
+
+          
         ))}
+
+        
       </section>
         <br /><br /><br /><br />
       <section className='container'>

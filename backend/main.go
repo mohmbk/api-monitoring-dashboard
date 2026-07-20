@@ -348,6 +348,104 @@ func checkAPI(api API) {
 	}
 }
 
+func deleteAPI(w http.ResponseWriter, r *http.Request) {
+	
+	if r.Method != "DELETE" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return ;
+	}
+
+	idstr := strings.TrimPrefix(r.URL.Path, "/dashboard/")
+	if idstr == "" {
+		http.Error(w, "API ID is required", http.StatusBadRequest)
+		return ;
+	}
+	id, err := primitive.ObjectIDFromHex(idstr);
+	if err != nil {
+		http.Error(w, "Invalid API ID", http.StatusBadRequest)
+		return ;
+	}
+
+	authHeader := r.Header.Get("Authorization");
+	if authHeader == "" {
+		http.Error(w, "Authorization header missing", http.StatusUnauthorized)
+		return ;
+	}
+
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ");
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return jwtSecret, nil
+	})
+
+	if err != nil || !token.Valid {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return ;
+	}
+
+	claims := token.Claims.(jwt.MapClaims);
+	userId := claims["userId"].(string);
+	objectID, err := primitive.ObjectIDFromHex(userId);
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return ;
+	}	
+
+	 result , err := apicollection.DeleteOne(context.Background(), bson.M{"_id": id, "userId": objectID});
+	if err != nil {
+		http.Error(w, "Failed to delete API", http.StatusInternalServerError)
+		return ;
+	}
+
+	if result.DeletedCount == 0 {
+		http.Error(w, "API not found or not authorized", http.StatusNotFound)
+		return ;
+	}
+
+	w.WriteHeader(http.StatusOK);
+
+}
+
+
+func getChecks(w http.ResponseWriter, r *http.Request) {
+
+	 fmt.Println("getChecks called")
+    fmt.Println("Method:", r.Method)
+    fmt.Println("Path:", r.URL.Path)
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return ;
+	}
+
+	idstr := strings.TrimPrefix(r.URL.Path, "/dashboard/api/");
+	idstr = strings.TrimSuffix(idstr, "/history");
+	id , err := primitive.ObjectIDFromHex(idstr);
+
+	if err != nil {
+		http.Error(w, "Invalid API ID", http.StatusBadRequest)
+		return ;
+	}
+
+	cursor , err := checkcollection.Find(context.Background(), bson.M{"apiId": id});
+	if err != nil {
+		http.Error(w, "Failed to fetch checks", http.StatusInternalServerError)
+		return ;
+	}
+
+	var checks []Check;
+	for cursor.Next(context.Background()) {
+		var check Check ;
+		err := cursor.Decode(&check);
+		if err != nil {
+			http.Error(w, "Failed to decode check", http.StatusInternalServerError)
+			return ;
+		}
+		checks = append(checks, check);
+	}
+
+	w.Header().Set("Content-Type", "application/json");
+	json.NewEncoder(w).Encode(checks);
+
+}
 
 func main() {
 	ctx , cancel := context.WithTimeout(context.Background() , 10*time.Second);
@@ -367,6 +465,8 @@ func main() {
 	http.HandleFunc("/signup", enableCORS(createUser));
 	http.HandleFunc("/login", enableCORS(login));
 	http.HandleFunc("/dashboard", enableCORS(handleAPI));
+	http.HandleFunc("/dashboard/", enableCORS(deleteAPI));
+	http.HandleFunc("/dashboard/api/", enableCORS(getChecks));
 	
 	go startMonitoring();
 	
